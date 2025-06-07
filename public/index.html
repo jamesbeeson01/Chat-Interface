@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">    <title>Express Web App</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style> 
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+            overflow: hidden;
+        }        
+        
+        .chat-container {
+            flex: 1;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden; /* Prevent horizontal scroll */
+        }
+
+        .messages {
+            flex: 1;
+            padding: 20px;
+            margin: 0 auto;
+            max-width: 800px;
+            width: 100%;
+            min-width: 0; /* Ensure content can shrink below min-content width */
+            box-sizing: border-box;
+        }
+
+        .input-container {
+            flex-shrink: 0;
+            padding: 20px;
+            background-color: white;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+        }        
+        
+        .input-wrapper {
+            display: flex;
+            max-width: 800px;
+            margin: 0 auto;
+            gap: 10px;
+            align-items: flex-end;
+            position: relative;
+            width: 100%;
+        }        
+        
+        .chat-input {
+            flex-grow: 1;
+            padding: 12px 16px;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            resize: none;
+            min-height: 24px;
+            max-height: 200px;
+            line-height: 1.5;
+            font-family: inherit;
+        }
+
+        .chat-input:focus {
+            border-color: #10a37f;
+        }
+
+        .submit-button {
+            padding: 12px 24px;
+            background-color: #10a37f;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.2s;
+        }
+
+        .submit-button:hover {
+            background-color: #0e906f;
+        }
+
+        .submit-button:disabled {
+            background-color: #e5e5e5;
+            cursor: not-allowed;
+        }        
+        
+        .message-container {
+            width: 100%;
+            padding: 20px;
+            background-color: white;
+            display: flex;
+            justify-content: flex-end;
+        }        
+        
+        .user-prompt {
+            max-width: 70%;
+            width: fit-content;
+            margin-right: max(20px, env(safe-area-inset-right, 20px)); /* Support devices with safe areas and ensure minimum margin */
+            background-color: #f7f7f8;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 16px;
+            line-height: 1.5;
+            color: #374151;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+        }
+
+        .response-container {
+            width: 100%;
+            padding: 0px;
+            background-color: white;
+            display: flex;
+            justify-content: flex-start;
+        } 
+
+        .chat-response {
+            width: fit-content;
+            padding: 16px;
+            font-size: 16px;
+            line-height: 1.5;
+            color: #374151;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+        }
+
+        /* Markdown styles */
+        .chat-response code {
+            background-color: #f7f7f8;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        .chat-response pre {
+            background-color: #f7f7f8;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+
+        .chat-response pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+
+        .chat-response p {
+            margin: 6px 0;
+        }
+
+        .chat-response ul, .chat-response ol {
+            margin: 4px 0;
+            padding-left: 24px;
+        }
+
+        .chat-response li {
+            margin: 2px 0;
+        }
+
+        .chat-response h1 { font-size: 2em; margin: 12px 0 8px 0; }
+        .chat-response h2 { font-size: 1.5em; margin: 12px 0 8px 0; }
+        .chat-response h3 { font-size: 1.17em; margin: 10px 0 6px 0; }
+        .chat-response h4 { font-size: 1em; margin: 10px 0 6px 0; }
+        .chat-response h5 { font-size: 0.83em; margin: 8px 0 4px 0; }
+        .chat-response h6 { font-size: 0.67em; margin: 8px 0 4px 0; }
+
+        .chat-response a {
+            color: #10a37f;
+            text-decoration: none;
+        }
+
+        .chat-response a:hover {
+            text-decoration: underline;
+        }
+
+        #survey-button {
+            padding: 12px 24px;
+            background-color: white;
+            border: 1px solid #e5e5e5;
+            /* border-color: #10a37f; */
+            color: #10a37f;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.2s;
+            border-width: 2px;
+            margin-left: auto;  /* This pushes the survey button to the right */
+        }
+
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="messages">
+            <!-- Messages will be added here -->
+        </div>
+    </div>
+    <div class="input-container">
+        <div class="input-wrapper">
+            <textarea class="chat-input" placeholder="Type your message..." rows="1"></textarea>
+            <button class="submit-button">Send</button>
+            <button id="survey-button">Survey</button>
+        </div>
+    </div>
+    <script>
+        // Add this function at the top of your script
+        async function reportMessageClick(type, sessionId, content) {
+            console.log(`Clicked ${type} message`);
+            try {
+                const response = await fetch('/message/click', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        type,
+                        sessionId,
+                        content
+                    })
+                });
+            } catch (err) {
+                console.error('Error reporting message click:', err);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.querySelector('.chat-input');
+            const button = document.querySelector('.submit-button');
+            const messages = document.querySelector('.messages');
+            const surveyButton = document.getElementById('survey-button');
+            
+            // Get session ID from URL if present
+            const urlParams = new URLSearchParams(window.location.search);
+            let currentSessionId = urlParams.get('session');
+            
+            // If we have a session ID in the URL, load that conversation
+            if (currentSessionId) {
+                loadHistory(currentSessionId);
+            } else {
+                alert(
+                    'This is consent and stuff\n' +
+                    'If you use this, you consent\n' +
+                    'Capishe?'
+                );
+            }
+            
+            // Handle survey button click
+            surveyButton.addEventListener('click', () => {
+                console.log('Survey button clicked');
+                // Open survey with session ID parameter
+                if (confirm("Starting the survey will end the conversation. \nAre you ready to start the survey?")) {
+                    // Get the current URL origin (protocol + hostname + port)
+                    const currentUrl = `${window.location.origin}/?session=${currentSessionId}`;
+                    window.open(`https://docs.google.com/forms/d/e/1FAIpQLSemaCJgJPxvsZMDXtQXaRQ6L1nE1mCfPWgamNGe9rhPwl3AfA/viewform?entry.86313814=${encodeURIComponent(currentUrl)}`, '_self');
+                }
+            });
+            
+            // Handle input changes and auto-resize
+            input.addEventListener('input', () => {
+                button.disabled = !input.value.trim();
+                
+                // Auto-resize the textarea
+                input.style.height = 'auto';
+                input.style.height = (Math.min(input.scrollHeight, 200) - 24) + 'px';
+            });
+
+            // Handle enter key
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    if (!e.shiftKey && input.value.trim()) {
+                        // Regular Enter = submit
+                        e.preventDefault();
+                        handleSubmit();
+                    }
+                }
+            });
+
+            // Handle button click
+            button.addEventListener('click', () => {
+                if (input.value.trim()) {
+                    handleSubmit();
+                }
+            });            
+            
+            async function handleSubmit() {
+                const message = input.value.trim();
+                // Clear input and reset height
+                input.value = '';
+                input.style.height = 'auto';  // Reset to default height
+                button.disabled = true;
+                
+                // Create message container with white background
+                const messageContainer = document.createElement('div');
+                messageContainer.className = 'message-container';                // Create the prompt element with gray background
+                const messageElement = document.createElement('div');
+                messageElement.className = 'user-prompt';
+                messageElement.textContent = message;
+                messageElement.onclick = () => reportMessageClick('user', currentSessionId, message);
+
+                // Add prompt to container and container to messages
+                messageContainer.appendChild(messageElement);
+                messages.appendChild(messageContainer);
+                
+                // Get chat response
+                let responseText = 'No response received';
+                try {
+                    const response = await fetch('/chat/prompt', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ 
+                            prompt: message,
+                            sessionId: currentSessionId
+                        })
+                    });
+
+                    const data = await response.json();
+                    responseText = data.response;
+                    // Update session ID
+                    currentSessionId = data.sessionId;
+                } catch (err) {
+                    console.log('Error getting chat response', err);
+                    responseText = 'Error: Could not get response';
+                }
+            
+                // Create response elements
+                const responseContainer = document.createElement('div');
+                responseContainer.className = 'response-container';                
+                const responseElement = document.createElement('div');
+                responseElement.className = 'chat-response';
+                // Parse markdown and set as HTML
+                responseElement.innerHTML = marked.parse(responseText);
+                responseElement.onclick = () => reportMessageClick('ai', currentSessionId, responseText);
+
+                // Add prompt to container and container to messages
+                responseContainer.appendChild(responseElement);
+                messages.appendChild(responseContainer);
+
+                // Scroll to bottom
+                const chatContainer = document.querySelector('.chat-container');
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            // Initialize button state
+            button.disabled = true;
+
+            // Load conversation history if session exists
+            async function loadHistory(sessionId) {
+                try {
+                    const response = await fetch(`/chat/history/${sessionId}`);
+                    const history = await response.json();
+                    
+                    history.forEach(msg => {
+                        const container = document.createElement('div');
+                        container.className = msg.type === 'user' ? 'message-container' : 'response-container';
+                        
+                        const element = document.createElement('div');
+                        element.className = msg.type === 'user' ? 'user-prompt' : 'chat-response';
+                        element.innerHTML = msg.type === 'user' ? msg.content : marked.parse(msg.content);
+                        element.onclick = () => reportMessageClick(msg.type, sessionId, msg.content);
+                        
+                        container.appendChild(element);
+                        messages.appendChild(container);
+                    });
+                    
+                    // Scroll to bottom after loading history
+                    const chatContainer = document.querySelector('.chat-container');
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                } catch (err) {
+                    console.error('Error loading chat history:', err);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

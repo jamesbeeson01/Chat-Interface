@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Message Details</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .message-container {
+            background-color: #f7f7f8;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .input-params {
+            background-color: #f0f0f0;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        h1 { margin-bottom: 20px; }
+        .label { font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Message Details</h1>
+    <div id="message-details">Loading...</div>
+
+    <script>
+        async function loadMessageDetails() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const messageId = urlParams.get('message');
+            
+            if (!messageId) {
+                document.getElementById('message-details').innerHTML = 'No message ID provided';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/message/${messageId}`);
+                const message = await response.json();
+                
+                let html = `
+                    <div class="message-container">
+                        <div class="label">Message ID:</div>
+                        <div>${message.id}</div>
+                        
+                        <div class="label">Type:</div>
+                        <div>${message.type}</div>
+                        
+                        <div class="label">Content:</div>
+                        <div>${message.content}</div>
+                        
+                        <div class="label">Timestamp:</div>
+                        <div>${new Date(message.timestamp).toLocaleString()}</div>
+                        
+                        <div class="label">Session ID:</div>
+                        <div>${message.sessionId}</div>
+
+                        <div class="label">Model:</div>
+                        <div>${message.model}</div>`;
+
+                if (message.input) {
+                    let inputData = typeof message.input === 'string' ? 
+                        JSON.parse(message.input) : message.input;
+                    html += `
+                        <div class="label">Input Parameters:</div>
+                        <div class="input-params">${JSON.stringify(inputData, null, 2)}</div>`;
+                }
+
+                html += '</div>';
+                document.getElementById('message-details').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading message details:', error);
+                document.getElementById('message-details').innerHTML = 'Error loading message details';
+            }
+        }
+
+        loadMessageDetails();
+    </script>
+</body>
+</html>
