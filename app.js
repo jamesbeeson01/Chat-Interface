@@ -1,11 +1,20 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 const { saveMessage, getSessionMessages } = require('./database');
 
+// Load environment variables
+require('dotenv').config();
+
 // api key
-const API_KEY = "AIzaSyBcCaUUXj4s6YYrRcXC7AGOrRbKNDrN7iQ"
+// const API_KEY = "AIzaSyBcCaUUXj4s6YYrRcXC7AGOrRbKNDrN7iQ"
+const API_KEY = process.env.GEMINI_API_KEY;
+if (!API_KEY) {
+    console.error('GEMINI_API_KEY environment variable is not set');
+    process.exit(1);
+}
+
 const model_type = "gemini-2.0-flash-exp"
 
 // Middleware to parse JSON bodies
