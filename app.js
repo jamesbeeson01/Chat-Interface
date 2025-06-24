@@ -15,7 +15,8 @@ if (!API_KEY) {
     process.exit(1);
 }
 
-const model_type = "gemini-2.0-flash-exp"
+const model_type = "gemini-2.0-flash-exp";
+var template = "Basic";
 
 // Middleware to parse JSON bodies
 app.use(express.json());
@@ -101,6 +102,12 @@ app.get('/chat/history/:sessionId', async (req, res) => {
         console.error('Error:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
+});
+
+// Update model template
+app.post('/chat/update-template', async (req, res) => {
+    const { template } = req.body
+    console.log(template)
 });
 
 // Handle message clicks

@@ -199,6 +199,44 @@
             margin-left: auto;  /* This pushes the survey button to the right */
         }
 
+        /* Modal styles */
+        #consent-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        #consent-modal .modal-content {
+            background: #fff;
+            padding: 32px;
+            border-radius: 12px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 2px 8px rgba(16,163,127,0.08);
+        }
+
+        #consent-modal .modal-content:focus {
+            outline: none;
+            box-shadow: 0 2px 8px rgba(16,163,127,0.08);
+        }
+
+        #consent-modal .modal-content h2 {
+            margin-top: 0;
+        }
+
+        #consent-modal .modal-content label {
+            margin-right: 20px;
+        }
+
     </style>
 </head>
 <body>
@@ -244,16 +282,123 @@
             // Get session ID from URL if present
             const urlParams = new URLSearchParams(window.location.search);
             let currentSessionId = urlParams.get('session');
+            let userSection = '';
             
             // If we have a session ID in the URL, load that conversation
             if (currentSessionId) {
                 loadHistory(currentSessionId);
             } else {
-                alert(
-                    'This is consent and stuff\n' +
-                    'If you use this, you consent\n' +
-                    'Capishe?'
-                );
+                // Consent modal implementation
+                const modal = document.createElement('div');
+                modal.id = 'consent-modal';
+                modal.style.position = 'fixed';
+                modal.style.top = '0';
+                modal.style.left = '0';
+                modal.style.width = '100vw';
+                modal.style.height = '100vh';
+                modal.style.background = 'rgba(0,0,0,0.7)';
+                modal.style.display = 'flex';
+                modal.style.alignItems = 'center';
+                modal.style.justifyContent = 'center';
+                modal.style.zIndex = '9999';
+
+                // Modal content container
+                const modalContent = document.createElement('div');
+                modalContent.className = 'modal-content';
+                modalContent.style.background = '#fff';
+                modalContent.style.padding = '32px';
+                modalContent.style.borderRadius = '12px';
+                modalContent.style.maxWidth = '600px';
+                modalContent.style.width = '90%';
+                modalContent.style.maxHeight = '80vh';
+                modalContent.style.overflowY = 'auto';
+                modalContent.style.boxShadow = '0 2px 8px rgba(16,163,127,0.08)';
+                modalContent.tabIndex = 0;
+
+                // Consent text
+                const consentText = document.createElement('div');
+                consentText.style.marginBottom = '24px';
+                consentText.style.whiteSpace = 'normal'; // Allow HTML/markdown rendering
+                consentText.innerHTML = '<em>Loading consent...</em>';
+                modalContent.appendChild(consentText);
+
+                // Additional question
+                const question = document.createElement('div');
+                question.style.margin = '16px 0 8px 0';
+                question.textContent = "Which section of Brother Pacini's class are you in?"; // Change this to your actual question
+                modalContent.appendChild(question);
+
+                // Radio options
+                const options = document.createElement('div');
+                options.style.marginBottom = '24px';
+                options.innerHTML = `
+                  <label style="margin-right:20px;"><input type="radio" name="consent-question" value="yes"> 9:45 am</label>
+                  <label><input type="radio" name="consent-question" value="no"> 2:00 pm</label>
+                `;
+                modalContent.appendChild(options);
+
+                // Confirm button
+                const confirmBtn = document.createElement('button');
+                confirmBtn.textContent = 'Confirm';
+                confirmBtn.disabled = true;
+                confirmBtn.style.padding = '10px 24px';
+                confirmBtn.style.background = '#10a37f';
+                confirmBtn.style.color = '#fff';
+                confirmBtn.style.border = 'none';
+                confirmBtn.style.borderRadius = '8px';
+                confirmBtn.style.fontSize = '16px';
+                confirmBtn.style.cursor = 'pointer';
+                confirmBtn.style.marginTop = '8px';
+                modalContent.appendChild(confirmBtn);
+
+                modal.appendChild(modalContent);
+                document.body.appendChild(modal);
+                modalContent.focus();
+
+                // Fetch consent.txt and render as markdown
+                fetch('consent.txt')
+                  .then(r => r.text())
+                  .then(text => {
+                    consentText.innerHTML = marked.parse(text);
+                  });
+
+                // Enable confirm button when a radio is selected
+                options.addEventListener('change', (e) => {
+                  if (e.target.name === 'consent-question') {
+                    confirmBtn.disabled = false;
+                  }
+                });
+
+                // Hide modal and allow chat on confirm
+                confirmBtn.addEventListener('click', async () => {
+                  modal.remove();
+                  try {
+                    const selected = options.querySelector('input[name="consent-question"]:checked');
+                    let template = 'Basic';
+                    if (selected && selected.parentElement.textContent.includes('9:45')) {
+                      template = 'Tutor';
+                    }
+                    // Save the section text (e.g., '9:45 am' or '2:00 pm')
+                    userSection = selected ? selected.parentElement.textContent.trim() : '';
+                    await fetch('/chat/update-template', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ template })
+                    });
+                  } catch (err) {
+                    console.log('Error updating template', err);
+                  }
+                });
+
+                // Trap focus in modal
+                modal.addEventListener('keydown', function(e) {
+                  if (e.key === 'Tab') {
+                    e.preventDefault();
+                    modalContent.focus();
+                  }
+                });
             }
             
             // Handle survey button click
@@ -263,7 +408,7 @@
                 if (confirm("Starting the survey will end the conversation. \nAre you ready to start the survey?")) {
                     // Get the current URL origin (protocol + hostname + port)
                     const currentUrl = `${window.location.origin}/?session=${currentSessionId}`;
-                    window.open(`https://docs.google.com/forms/d/e/1FAIpQLSemaCJgJPxvsZMDXtQXaRQ6L1nE1mCfPWgamNGe9rhPwl3AfA/viewform?entry.86313814=${encodeURIComponent(currentUrl)}`, '_self');
+                    window.open(`https://docs.google.com/forms/d/e/1FAIpQLSemaCJgJPxvsZMDXtQXaRQ6L1nE1mCfPWgamNGe9rhPwl3AfA/viewform?entry.86313814=${encodeURIComponent(currentUrl)}&entry.9912093=${encodeURIComponent(userSection)}`,'_self');
                 }
             });
             
