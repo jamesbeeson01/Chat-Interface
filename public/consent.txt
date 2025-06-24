@@ -3,18 +3,20 @@
 This AI chat is for student research conducted by James Beeson. Conversations are recorded completely anonymous so long as contents of the conversation contain no identifying information. Use of this chat is consent for your conversation to be viewed by the researcher and quoted in public writings. 
 
 **Background:**
-Literature is constantly being released about the potential benefits and dangers of AI use for learning. It seems that most young adults and teenagers believe general use AI can be highly beneficial and highly detrimental to learning, and researchers are observing both. 
+From recent AI literature and my own observations, it seems that most young adults and teenagers believe general use AI can be highly beneficial and highly detrimental to learning, and researchers are observing both. 
 
 **Purpose:**
 This research is in attempt to use learning theory and current AI literature to create and test a customized AI chat to assist the user in learning, playing to AI's strengths while avoiding its pitfalls that can harm learning. 
 
 **Instructions:**
-- Use this chat to help you learn content in Education Psychology and Human Development. 
+- Use this chat to help you learn content in Education Psychology and Human Development, especially for the upcoming weekly quiz. 
 - You can use the chat for as long as you would like and leave the chat at any time. 
 - When you are finished with the chat session, click the survey button to submit a short survey clarifying how the chat behaved and if it was beneficial to you.
 - Answering the survey will be easiest if you have a long enough conversation to form some opinions about the AI chat's behavior and helpfulness.
 
 Again, use of this chat is consent for your conversation to be viewed by the researcher and possibly quoted in public writings. Conversations are completely anonymous as long as contents of the conversation contain no identifying information.
+
+Although attempts have been made to ground the treatment AI with textbook content, there is no guarantee that it will provide accurate information.
 
 If you have issues or questions about the research, feel free to contact me:
 jamesbeeson@byui.edu
