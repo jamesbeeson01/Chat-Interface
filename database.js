@@ -8,6 +8,13 @@ const db = new sqlite3.Database(dbPath);
 
 // Initialize database tables
 db.serialize(() => {
+    // Session table
+    db.run(`
+        CREATE TABLE IF NOT EXISTS session (
+            sessionId TEXT PRIMARY KEY,
+            sessionLength INTEGER
+        )
+    `);
     // Messages table
     db.run(`
         CREATE TABLE IF NOT EXISTS messages (
@@ -20,10 +27,12 @@ db.serialize(() => {
             templateName TEXT,
             parentMessageId TEXT,
             input TEXT,
-            FOREIGN KEY (parentMessageId) REFERENCES messages(id)
-            FOREIGN KEY (templateName) REFERENCES template(name)
+            FOREIGN KEY (parentMessageId) REFERENCES messages(id),
+            FOREIGN KEY (templateName) REFERENCES template(name),
+            FOREIGN KEY (sessionId) REFERENCES session(sessionId)
         )
-    `);    // Templates table
+    `);
+    // Templates table
     db.run(`
         CREATE TABLE IF NOT EXISTS template (
             name TEXT PRIMARY KEY,
@@ -69,8 +78,64 @@ function getSessionMessages(sessionId) {
     });
 }
 
+function getNumPrompts(sessionId) {
+    return new Promise((resolve, reject) => {
+        db.get(
+            'SELECT COUNT(*) AS count FROM messages WHERE sessionId = ? AND type = ?',
+            [sessionId, 'user'],
+            (err, row) => {
+                if (err) reject(err);
+                else resolve(row ? row.count : 0);
+            }
+        );
+    });
+}
+
+function saveSession(sessionId) {
+    return new Promise((resolve, reject) => {
+        db.run(
+            `INSERT OR IGNORE INTO session (sessionId, sessionLength) VALUES (?, 0)`,
+            [sessionId],
+            (err) => {
+                if (err) reject(err);
+                else resolve();
+            }
+        );
+    });
+}
+
+function updateSessionLength(sessionId, sessionLength) {
+    return new Promise((resolve, reject) => {
+        db.run(
+            `UPDATE session SET sessionLength = ? WHERE sessionId = ?`,
+            [sessionLength, sessionId],
+            (err) => {
+                if (err) reject(err);
+                else resolve();
+            }
+        );
+    });
+}
+
+function getSessionLength(sessionId) {
+    return new Promise((resolve, reject) => {
+        db.get(
+            'SELECT sessionLength FROM session WHERE sessionId = ?',
+            [sessionId],
+            (err, row) => {
+                if (err) reject(err);
+                else resolve(row ? row.sessionLength : null);
+            }
+        );
+    });
+}
+
 module.exports = {
     saveMessage,
     getSessionMessages,
+    getNumPrompts,
+    saveSession,
+    updateSessionLength,
+    getSessionLength,
     db
 };

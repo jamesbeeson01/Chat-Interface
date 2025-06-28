@@ -237,6 +237,39 @@
             margin-right: 20px;
         }
 
+        .session-timer-icon {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            width: 28px;
+            height: 28px;
+            opacity: 0.4;
+            cursor: pointer;
+            z-index: 10000;
+            transition: opacity 0.2s;
+        }
+        .session-timer-icon:hover {
+            opacity: 0.8;
+        }
+
+        .session-timer-tooltip {
+            display: none;
+            position: fixed;
+            bottom: 52px;
+            right: 16px;
+            background: #222;
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 15px;
+            opacity: 0.5;
+            pointer-events: none;
+            z-index: 10001;
+            white-space: nowrap;
+        }
+        .session-timer-icon:hover + .session-timer-tooltip {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -252,7 +285,36 @@
             <button id="survey-button">Survey</button>
         </div>
     </div>
+    <svg id="session-timer-icon" class="session-timer-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="10" stroke="#374151" stroke-width="2" fill="white"/>
+        <path d="M12 7v5l3 3" stroke="#374151" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div id="session-timer-tooltip" class="session-timer-tooltip"></div>
     <script>
+        // Cookie helpers
+        function setCookie(name, value, days) {
+            let expires = '';
+            if (days) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days*24*60*60*1000));
+                expires = '; expires=' + date.toUTCString();
+            }
+            document.cookie = name + '=' + (value || '')  + expires + '; path=/';
+        }
+        function getCookie(name) {
+            const nameEQ = name + '=';
+            const ca = document.cookie.split(';');
+            for(let i=0;i < ca.length;i++) {
+                let c = ca[i];
+                while (c.charAt(0)==' ') c = c.substring(1,c.length);
+                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+            }
+            return null;
+        }
+        function deleteSessionCookie() {
+            document.cookie = 'sessionId=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+        }
+
         // Add this function at the top of your script
         async function reportMessageClick(type, sessionId, content) {
             console.log(`Clicked ${type} message`);
@@ -273,6 +335,44 @@
             }
         }
 
+        let freeze = false;
+        let sessionMinutes = 0;
+        let sessionTimer = null;
+
+        function updateSessionTimerTooltip() {
+            const tooltip = document.getElementById('session-timer-tooltip');
+            if (tooltip) {
+                tooltip.textContent = `Session time: ${sessionMinutes} minute${sessionMinutes === 1 ? '' : 's'}`;
+            }
+        }
+
+        async function startSessionTimer(sessionId) {
+            if (!sessionId) return;
+            // Get initial session length from backend
+            try {
+                const response = await fetch(`/session/length/${sessionId}`);
+                const data = await response.json();
+                sessionMinutes = Number.isInteger(data.sessionLength) ? data.sessionLength : 0;
+            } catch (err) {
+                sessionMinutes = 0;
+            }
+            // Start timer
+            if (sessionTimer) clearInterval(sessionTimer);
+            updateSessionTimerTooltip();
+            sessionTimer = setInterval(async () => {
+                if (!freeze) {
+                    sessionMinutes++;
+                    updateSessionTimerTooltip();
+                    // Update backend
+                    await fetch(`/session/length/${sessionId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sessionLength: sessionMinutes })
+                    });
+                }
+            }, 60000); // 1 minute
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const input = document.querySelector('.chat-input');
             const button = document.querySelector('.submit-button');
@@ -282,11 +382,20 @@
             // Get session ID from URL if present
             const urlParams = new URLSearchParams(window.location.search);
             let currentSessionId = urlParams.get('session');
+            freeze = currentSessionId !== null;
+            if (!currentSessionId) {
+                // If not in URL, check cookie
+                const cookieSessionId = getCookie('sessionId');
+                if (cookieSessionId) {
+                    currentSessionId = cookieSessionId;
+                }
+            }
             let userSection = '';
             
             // If we have a session ID in the URL, load that conversation
             if (currentSessionId) {
                 loadHistory(currentSessionId);
+                startSessionTimer(currentSessionId);
             } else {
                 // Consent modal implementation
                 const modal = document.createElement('div');
@@ -333,7 +442,7 @@
                 options.style.marginBottom = '24px';
                 options.innerHTML = `
                   <label style="margin-right:20px;"><input type="radio" name="consent-question" value="yes"> 9:45 am</label>
-                  <label><input type="radio" name="consent-question" value="no"> 2:00 pm</label>
+                  <label><input type="radio" name="consent-question" value="no"> Online</label>
                 `;
                 modalContent.appendChild(options);
 
@@ -374,19 +483,19 @@
                   modal.remove();
                   try {
                     const selected = options.querySelector('input[name="consent-question"]:checked');
-                    let template = 'Basic';
-                    if (selected && selected.parentElement.textContent.includes('9:45')) {
-                      template = 'Tutor';
-                    }
-                    // Save the section text (e.g., '9:45 am' or '2:00 pm')
+                    // let template = 'Basic';
+                    // if (selected && selected.parentElement.textContent.includes('9:45')) {
+                    //   template = 'Tutor';
+                    // }
+                    // Save the section text (e.g., '9:45 am' or 'Online')
                     userSection = selected ? selected.parentElement.textContent.trim() : '';
-                    await fetch('/chat/update-template', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify({ template })
-                    });
+                    // await fetch('/chat/update-template', {
+                    //   method: 'POST',
+                    //   headers: {
+                    //     'Content-Type': 'application/json'
+                    //   },
+                    //   body: JSON.stringify({ template })
+                    // });
                   } catch (err) {
                     console.log('Error updating template', err);
                   }
@@ -402,43 +511,58 @@
             }
             
             // Handle survey button click
-            surveyButton.addEventListener('click', () => {
+            surveyButton.addEventListener('click', async () => {
                 console.log('Survey button clicked');
+
+                const response = await fetch(`/chat/history/nprompts/${currentSessionId}`);
+                const data = await response.json();
+                const nprompts = data.nprompts;
+                console.log(nprompts);
+
+                let message;
+                if (nprompts > 3) {
+                    message = "Starting the survey will end the conversation. \nAre you ready to start the survey?";
+                } else {
+                    message = "It may help to give at least 3 prompts before starting the survey.\nStarting the survey will end the conversation. \nAre you sure you would like to start the survey?";
+                }
+
                 // Open survey with session ID parameter
-                if (confirm("Starting the survey will end the conversation. \nAre you ready to start the survey?")) {
+                if (confirm(message)) {
                     // Get the current URL origin (protocol + hostname + port)
                     const currentUrl = `${window.location.origin}/?session=${currentSessionId}`;
                     window.open(`https://docs.google.com/forms/d/e/1FAIpQLSemaCJgJPxvsZMDXtQXaRQ6L1nE1mCfPWgamNGe9rhPwl3AfA/viewform?entry.86313814=${encodeURIComponent(currentUrl)}&entry.9912093=${encodeURIComponent(userSection)}`,'_self');
                 }
             });
-            
-            // Handle input changes and auto-resize
-            input.addEventListener('input', () => {
-                button.disabled = !input.value.trim();
-                
-                // Auto-resize the textarea
-                input.style.height = 'auto';
-                input.style.height = (Math.min(input.scrollHeight, 200) - 24) + 'px';
-            });
 
-            // Handle enter key
-            input.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    if (!e.shiftKey && input.value.trim()) {
-                        // Regular Enter = submit
-                        e.preventDefault();
+            if (!freeze) {
+                // Handle input changes and auto-resize
+                input.addEventListener('input', () => {
+                    button.disabled = !input.value.trim();
+                    
+                    // Auto-resize the textarea
+                    input.style.height = 'auto';
+                    input.style.height = (Math.min(input.scrollHeight, 200) - 24) + 'px';
+                });
+
+                // Handle enter key
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        if (!e.shiftKey && input.value.trim()) {
+                            // Regular Enter = submit
+                            e.preventDefault();
+                            handleSubmit();
+                        }
+                    }
+                });
+
+                // Handle button click
+                button.addEventListener('click', () => {
+                    if (input.value.trim()) {
                         handleSubmit();
                     }
-                }
-            });
+                });              
+            }
 
-            // Handle button click
-            button.addEventListener('click', () => {
-                if (input.value.trim()) {
-                    handleSubmit();
-                }
-            });            
-            
             async function handleSubmit() {
                 const message = input.value.trim();
                 // Clear input and reset height
@@ -475,7 +599,11 @@
                     const data = await response.json();
                     responseText = data.response;
                     // Update session ID
-                    currentSessionId = data.sessionId;
+                    if (!currentSessionId || currentSessionId !== data.sessionId) {
+                        currentSessionId = data.sessionId;
+                        startSessionTimer(currentSessionId);
+                        setCookie('sessionId', currentSessionId, 30); // Save for 30 days
+                    }
                 } catch (err) {
                     console.log('Error getting chat response', err);
                     responseText = 'Error: Could not get response';
@@ -528,6 +656,14 @@
                     console.error('Error loading chat history:', err);
                 }
             }
+
+            // This is mostly for testing and debugging - I don't want to be stuck with a session
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'u') {
+                    deleteSessionCookie();
+                    console.log('Session cookie deleted');
+                }
+            });
         });
     </script>
 </body>

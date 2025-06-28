@@ -2,7 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const app = express();
 const port = process.env.PORT || 3000;
-const { saveMessage, getSessionMessages } = require('./database');
+const { saveMessage, getSessionMessages, getNumPrompts, saveSession, updateSessionLength, getSessionLength } = require('./database');
 
 // Load environment variables
 require('dotenv').config();
@@ -42,6 +42,10 @@ app.post('/chat/prompt', async (req, res) => {
         console.log('Session ID:', currentSessionId);
         console.log('Received prompt:', prompt);
         
+        // Store session if new
+        if (!sessionId) {
+            await saveSession(currentSessionId);
+        }
         // Get session messages and save new user message
         const messages = await getSessionMessages(currentSessionId);
         const userMessageId = uuidv4();
@@ -104,10 +108,21 @@ app.get('/chat/history/:sessionId', async (req, res) => {
     }
 });
 
+app.get('/chat/history/nprompts/:sessionId', async (req, res) => {
+    try {
+        const nprompts = await getNumPrompts(req.params.sessionId);
+        res.json({ nprompts });
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Update model template
 app.post('/chat/update-template', async (req, res) => {
-    const { template } = req.body
-    console.log(template)
+    const { template } = req.body;
+    console.log(template);
+    res.status(200).json({ success: true }); // Send a response to the client
 });
 
 // Handle message clicks
@@ -163,6 +178,27 @@ app.get('/message/:messageId', async (req, res) => {
         );
     } catch (error) {
         console.error('Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get session length (in minutes)
+app.get('/session/length/:sessionId', async (req, res) => {
+    try {
+        const sessionLength = await getSessionLength(req.params.sessionId);
+        res.json({ sessionLength });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update session length (in minutes)
+app.put('/session/length/:sessionId', async (req, res) => {
+    try {
+        const { sessionLength } = req.body;
+        await updateSessionLength(req.params.sessionId, sessionLength);
+        res.json({ success: true });
+    } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
