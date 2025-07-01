@@ -315,7 +315,7 @@
             document.cookie = 'sessionId=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
         }
 
-        // Add this function at the top of your script
+        // Function to report message clicks
         async function reportMessageClick(type, sessionId, content) {
             console.log(`Clicked ${type} message`);
             try {
@@ -338,6 +338,13 @@
         let freeze = false;
         let sessionMinutes = 0;
         let sessionTimer = null;
+
+        // Function to show the session URL alert
+        function showSessionUrl(sessionId, delay = 1000) {
+            setTimeout(() => {
+                alert(`This is your verification link you will need to submit in the weekly quiz:\n\n${window.location.origin}/?session=${sessionId}\n\nIf you lose it, you can find it again in the survey or by refreshing the page.`);
+            }, delay);
+        }
 
         function updateSessionTimerTooltip() {
             const tooltip = document.getElementById('session-timer-tooltip');
@@ -373,26 +380,48 @@
             }, 60000); // 1 minute
         }
 
+        // Function to determine week based on current date
+        function getCurrentWeek() {
+            const now = new Date();
+            const week11Start = new Date('2025-06-30T00:00:00');
+            const week11End = new Date('2025-07-06T23:59:59');
+            const week12Start = new Date('2025-07-07T00:00:00');
+            const week12End = new Date('2025-07-13T23:59:59');
+            if (now <= week11End) return 'Week 11';
+            if (now >= week12Start && now <= week12End) return 'Week 12';
+            return 'other';
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const input = document.querySelector('.chat-input');
             const button = document.querySelector('.submit-button');
             const messages = document.querySelector('.messages');
             const surveyButton = document.getElementById('survey-button');
+            const week = getCurrentWeek();
+            console.log(week);
+            let treatment = 1;
             
             // Get session ID from URL if present
             const urlParams = new URLSearchParams(window.location.search);
             let currentSessionId = urlParams.get('session');
-            freeze = currentSessionId !== null;
+            let sessionFromUrl = currentSessionId !== null;
+            freeze = sessionFromUrl;
             if (!currentSessionId) {
                 // If not in URL, check cookie
                 const cookieSessionId = getCookie('sessionId');
                 if (cookieSessionId) {
                     currentSessionId = cookieSessionId;
+                    // Show session URL when session is loaded from cookie (on refresh)
+                    showSessionUrl(currentSessionId, 1000);
                 }
+            }
+            if (!currentSessionId && week == "Week 12") {
+                    alert("ERROR: No sessionId \nPlease contact James Beeson at jamesbeeson01@gmail.com");
+                    freeze = true;
             }
             let userSection = '';
             
-            // If we have a session ID in the URL, load that conversation
+            // If we have a session ID, load that conversation
             if (currentSessionId) {
                 loadHistory(currentSessionId);
                 startSessionTimer(currentSessionId);
@@ -483,12 +512,43 @@
                   modal.remove();
                   try {
                     const selected = options.querySelector('input[name="consent-question"]:checked');
-                    // let template = 'Basic';
-                    // if (selected && selected.parentElement.textContent.includes('9:45')) {
-                    //   template = 'Tutor';
-                    // }
+
                     // Save the section text (e.g., '9:45 am' or 'Online')
                     userSection = selected ? selected.parentElement.textContent.trim() : '';
+                    let template = 'Basic'; // change to control eventually
+                    
+                    // Initialize a new session on the server
+                    const response = await fetch('/session/init', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ 
+                            userSection: userSection,
+                            template: week
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success && data.sessionId) {
+                        // Set the session ID from the server response
+                        currentSessionId = data.sessionId;
+                        // Update the treatment value if provided
+                        if (data.treatment !== undefined) {
+                            treatment = data.treatment;
+                            console.log(`Session treatment: ${treatment}`);
+                        }
+                        // Save it as a cookie
+                        setCookie('sessionId', currentSessionId, 30);
+                        // Start the session timer
+                        startSessionTimer(currentSessionId);
+                        
+                        // Show session URL for new sessions
+                        showSessionUrl(currentSessionId, 1000);
+                    } else {
+                        console.error('Failed to initialize session');
+                    }
+                    
                     // await fetch('/chat/update-template', {
                     //   method: 'POST',
                     //   headers: {
@@ -497,7 +557,7 @@
                     //   body: JSON.stringify({ template })
                     // });
                   } catch (err) {
-                    console.log('Error updating template', err);
+                    console.log('Error initializing session', err);
                   }
                 });
 
@@ -513,6 +573,7 @@
             // Handle survey button click
             surveyButton.addEventListener('click', async () => {
                 console.log('Survey button clicked');
+                console.log(week);
 
                 const response = await fetch(`/chat/history/nprompts/${currentSessionId}`);
                 const data = await response.json();
@@ -528,9 +589,26 @@
 
                 // Open survey with session ID parameter
                 if (confirm(message)) {
+                    // Fetch number of question marks in AI messages for this session
+                    let questions = 0;
+                    try {
+                        const qmResponse = await fetch(`/session/questions/${currentSessionId}`);
+                        if (qmResponse.ok) {
+                            const qmData = await qmResponse.json();
+                            questions = qmData.count;
+                            console.log('AI question marks in session:', questions);
+                            // You can use qmData.count as needed here
+                        } else {
+                            console.warn('Failed to fetch AI question marks');
+                        }
+                    } catch (err) {
+                        console.error('Error fetching AI question marks:', err);
+                    }
+                    console.log(week);
                     // Get the current URL origin (protocol + hostname + port)
                     const currentUrl = `${window.location.origin}/?session=${currentSessionId}`;
-                    window.open(`https://docs.google.com/forms/d/e/1FAIpQLSemaCJgJPxvsZMDXtQXaRQ6L1nE1mCfPWgamNGe9rhPwl3AfA/viewform?entry.86313814=${encodeURIComponent(currentUrl)}&entry.9912093=${encodeURIComponent(userSection)}`,'_self');
+                    const headers = `entry.86313814=${encodeURIComponent(currentUrl)}&entry.9912093=${encodeURIComponent(userSection)}&entry.1469097836=${encodeURIComponent(nprompts)}&entry.1409923565=${encodeURIComponent(questions)}&entry.1896420886=${encodeURIComponent(week)}`;
+                    window.open(`https://docs.google.com/forms/d/e/1FAIpQLSemaCJgJPxvsZMDXtQXaRQ6L1nE1mCfPWgamNGe9rhPwl3AfA/viewform?${headers}`,'_self');
                 }
             });
 
@@ -592,14 +670,17 @@
                         },
                         body: JSON.stringify({ 
                             prompt: message,
-                            sessionId: currentSessionId
+                            sessionId: currentSessionId,
+                            template: week // ** Issue Pass week as templateName
                         })
                     });
 
                     const data = await response.json();
                     responseText = data.response;
-                    // Update session ID
-                    if (!currentSessionId || currentSessionId !== data.sessionId) {
+                    // The session ID is already set when consent is given
+                    // Just ensure we have the correct session ID from the server if needed
+                    if (data.sessionId && currentSessionId !== data.sessionId) {
+                        console.log('Session ID from server differs from client, updating...');
                         currentSessionId = data.sessionId;
                         startSessionTimer(currentSessionId);
                         setCookie('sessionId', currentSessionId, 30); // Save for 30 days
@@ -662,6 +743,14 @@
                 if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'u') {
                     deleteSessionCookie();
                     console.log('Session cookie deleted');
+                }
+            });
+
+            // This is mostly for testing and debugging - I don't want to be stuck with a session
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'y') {
+                    setCookie('access', 'true', 1);
+                    console.log('Access set to true');
                 }
             });
         });

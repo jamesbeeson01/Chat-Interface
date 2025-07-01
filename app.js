@@ -2,7 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const app = express();
 const port = process.env.PORT || 3000;
-const { saveMessage, getSessionMessages, getNumPrompts, saveSession, updateSessionLength, getSessionLength } = require('./database');
+const { saveMessage, getSessionMessages, getNumPrompts, saveSession, updateSessionLength, getSessionLength, countAIQuestionMarks, lastTreatment } = require('./database');
 
 // Load environment variables
 require('dotenv').config();
@@ -14,6 +14,10 @@ if (!API_KEY) {
     console.error('GEMINI_API_KEY environment variable is not set');
     process.exit(1);
 }
+
+// Gemini API setup
+const { GoogleGenAI } = require('@google/genai');
+const ai = new GoogleGenAI({ apiKey: API_KEY});
 
 const model_type = "gemini-2.0-flash-exp";
 var template = "Basic";
@@ -30,32 +34,30 @@ app.get('/', (req, res) => {
     res.sendFile(__dirname + '/public/index.html');
 });
 
-// Gemini API setup
-const { GoogleGenAI } = require('@google/genai');
-const ai = new GoogleGenAI({ apiKey: API_KEY});
-
 // Get chat response
 app.post('/chat/prompt', async (req, res) => {
     try {
-        const { prompt, sessionId } = req.body;
-        const currentSessionId = sessionId || uuidv4();
-        console.log('Session ID:', currentSessionId);
+        const { prompt, sessionId, template } = req.body;
+        
+        // Ensure we have a session ID
+        if (!sessionId) {
+            return res.status(400).json({ error: 'Session ID is required' });
+        }
+        
+        const templateName = template || 'Basic';
+        console.log('Session ID:', sessionId);
         console.log('Received prompt:', prompt);
         
-        // Store session if new
-        if (!sessionId) {
-            await saveSession(currentSessionId);
-        }
         // Get session messages and save new user message
-        const messages = await getSessionMessages(currentSessionId);
+        const messages = await getSessionMessages(sessionId);
         const userMessageId = uuidv4();
         await saveMessage({
             id: userMessageId,
             content: prompt,
             type: 'user',
-            sessionId: currentSessionId,
+            sessionId: sessionId,
             model: model_type,
-            templateName: 'Basic',
+            templateName: templateName,
             parentMessageId: messages.length > 0 ? messages[messages.length - 1].id : null,
             input: null
         });
@@ -80,19 +82,50 @@ app.post('/chat/prompt', async (req, res) => {
             id: uuidv4(),
             content: text,
             type: 'ai',
-            sessionId: currentSessionId,
+            sessionId: sessionId,
             model: model_type,
-            templateName: 'Basic',
+            templateName: templateName,
             parentMessageId: userMessageId,
             input: JSON.stringify(input)
         });
         
         res.json({ 
             response: text,
-            sessionId: currentSessionId
+            sessionId: sessionId
         });
     } catch (error) {
         console.error('Error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Initialize a new session
+app.post('/session/init', async (req, res) => {
+    try {
+        const { userSection, template } = req.body;
+        const sessionId = uuidv4();
+        
+        // Determine treatment based on previous sessions with the same userSection
+        let treatment = 1; // Default to 1 if no previous session or if previous treatment was 0
+        if (userSection) {
+            const lastTreat = await lastTreatment(userSection);
+            // Use strict equality and handle null case
+            treatment = (lastTreat === 1) ? 0 : 1;
+            console.log(`User section: ${userSection}, Last treatment: ${lastTreat}, New treatment: ${treatment}`);
+        }
+        
+        // Store the new session in the database
+        await saveSession(sessionId, userSection, treatment);
+        
+        console.log('Initialized new session:', sessionId);
+        
+        res.json({ 
+            sessionId: sessionId,
+            success: true,
+            treatment: treatment // Include the treatment in the response
+        });
+    } catch (error) {
+        console.error('Error initializing session:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -198,6 +231,16 @@ app.put('/session/length/:sessionId', async (req, res) => {
         const { sessionLength } = req.body;
         await updateSessionLength(req.params.sessionId, sessionLength);
         res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get number of question marks in 'ai' messages for a session
+app.get('/session/questions/:sessionId', async (req, res) => {
+    try {
+        const count = await countAIQuestionMarks(req.params.sessionId);
+        res.json({ count });
     } catch (error) {
         res.status(500).json({ error: 'Internal server error' });
     }

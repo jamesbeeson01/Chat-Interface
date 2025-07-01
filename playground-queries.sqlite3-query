@@ -1,0 +1,36 @@
+-- database: c:\Users\yolam\OneDrive - BYU-Idaho\Documents\Courses - OneDrive\DS 499 Senior Project 2025\Chat Interface\chat.db
+
+-- Use the ▷ button in the top right corner to run the entire file.
+
+SELECT * FROM messages;
+
+SELECT DISTINCT sessionId
+FROM messages
+LIMIT 1 OFFSET 1;
+
+SELECT *
+FROM messages
+WHERE sessionId = (
+    SELECT DISTINCT sessionId
+    FROM messages
+    LIMIT 1 OFFSET 2);
+
+-- ALTER TABLE messages 
+-- ADD COLUMN input TEXT;
+
+SELECT name FROM sqlite_master WHERE type='table';
+
+SELECT COUNT(*) AS count
+FROM messages
+WHERE sessionId = '3f50c1d6-ab4f-4d65-a2b4-c03f0b152264'
+    AND type = 'user';
+
+SELECT treatment
+FROM session s
+LEFT JOIN messages m ON s.sessionId = m.sessionId
+GROUP BY s.sessionId
+HAVING userSection = 'Online'
+ORDER BY MIN(timestamp) DESC
+LIMIT 1;
+
+DROP TABLE session;

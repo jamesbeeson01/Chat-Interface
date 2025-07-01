@@ -12,7 +12,9 @@ db.serialize(() => {
     db.run(`
         CREATE TABLE IF NOT EXISTS session (
             sessionId TEXT PRIMARY KEY,
-            sessionLength INTEGER
+            sessionLength INTEGER,
+            userSection TEXT,
+            treatment BOOLEAN
         )
     `);
     // Messages table
@@ -65,16 +67,21 @@ function saveMessage(message) {
     });
 }
 
-function getSessionMessages(sessionId) {
+function getSessionMessages(sessionId, excludeControl = false) {
     return new Promise((resolve, reject) => {
-        db.all(
-            'SELECT * FROM messages WHERE sessionId = ? ORDER BY timestamp ASC',
-            [sessionId],
-            (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            }
-        );
+        let query = 'SELECT * FROM messages WHERE sessionId = ?';
+        let params = [sessionId];
+
+        if (excludeControl) {
+            query += " AND templateName != 'Control'";
+        }
+
+        query += ' ORDER BY timestamp ASC';
+
+        db.all(query, params, (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+        });
     });
 }
 
@@ -91,11 +98,11 @@ function getNumPrompts(sessionId) {
     });
 }
 
-function saveSession(sessionId) {
+function saveSession(sessionId, userSection = null, treatment = null) {
     return new Promise((resolve, reject) => {
         db.run(
-            `INSERT OR IGNORE INTO session (sessionId, sessionLength) VALUES (?, 0)`,
-            [sessionId],
+            `INSERT OR IGNORE INTO session (sessionId, sessionLength, userSection, treatment) VALUES (?, 0, ?, ?)`,
+            [sessionId, userSection, treatment],
             (err) => {
                 if (err) reject(err);
                 else resolve();
@@ -130,6 +137,58 @@ function getSessionLength(sessionId) {
     });
 }
 
+function countAIQuestionMarks(sessionId) {
+    return new Promise((resolve, reject) => {
+        db.all(
+            'SELECT content FROM messages WHERE sessionId = ? AND type = ?',
+            [sessionId, 'ai'],
+            (err, rows) => {
+                if (err) reject(err);
+                else {
+                    let count = 0;
+                    for (const row of rows) {
+                        if (row.content) {
+                            count += (row.content.match(/\?/g) || []).length;
+                        }
+                    }
+                    resolve(count);
+                }
+            }
+        );
+    });
+}
+
+// function sessionTime(sessionId) {
+//     return new Promise((resolve, reject) => {
+//         db.get(
+//             "SELECT timestamp FROM messages WHERE sessionId = ? ORDER BY timestamp LIMIT 1"
+//             [sessionId],
+//             (err, row) => {
+//                 if (err) reject(err);
+//                 else resolve(row ? row.timestamp: null);
+//             }
+            
+//         )
+//     });
+// }
+
+function lastTreatment(userSection) {
+    return new Promise((resolve, reject) => {
+        db.get(
+            `SELECT treatment
+             FROM session
+             WHERE userSection = ?
+             ORDER BY ROWID DESC
+             LIMIT 1;`,
+            [userSection],
+            (err, row) => {
+                if (err) reject(err);
+                else resolve(row ? row.treatment: null);
+            }
+        )
+    });
+}
+
 module.exports = {
     saveMessage,
     getSessionMessages,
@@ -137,5 +196,7 @@ module.exports = {
     saveSession,
     updateSessionLength,
     getSessionLength,
+    countAIQuestionMarks,
+    lastTreatment,
     db
 };
