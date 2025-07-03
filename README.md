@@ -176,6 +176,17 @@ Then, return to the SSH and pull changes
 git pull
 ```
 
+If you have issues with chat.db conflicts,
+```bash
+# Cloud SSH
+git checkout --ours chat.db
+
+# Local
+git checkout --theirs chat.db
+```
+
+The reason for the above is that the server data in the database is the actual experiement data, not test data. The server data should be kept at all costs.
+
 If there are any new dependencies, install them
 ```bash
 npm install
@@ -188,6 +199,12 @@ sudo systemctl restart chatapp
 
 # Verify the service is running
 sudo systemctl status chatapp
+```
+
+Alternatively, kill the node process and it will restart
+```bash
+ps aux | grep node # to get process number for node
+kill 2022622 # or whatever number is shown 
 ```
 
 ### Pulling Updates
