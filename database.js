@@ -38,13 +38,13 @@ db.serialize(() => {
     db.run(`
         CREATE TABLE IF NOT EXISTS template (
             name TEXT PRIMARY KEY,
-            basePrompt TEXT
+            prompt TEXT
         )
     `);
 
     // Insert default template
     db.run(`
-        INSERT OR IGNORE INTO template (name, basePrompt)
+        INSERT OR IGNORE INTO template (name, prompt)
         VALUES ('Basic', NULL)
     `);
 });
@@ -183,9 +183,35 @@ function lastTreatment(userSection) {
             [userSection],
             (err, row) => {
                 if (err) reject(err);
-                else resolve(row ? row.treatment: null);
+                else resolve(row ? row.treatment : null);
             }
         )
+    });
+}
+
+function getTreatment(sessionId) {
+    return new Promise((resolve, reject) => {
+        db.get(
+            'SELECT treatment FROM session WHERE sessionId = ?',
+            [sessionId],
+            (err, row) => {
+                if (err) reject(err);
+                else resolve(row ? row.treatment : null);
+            }
+        )
+    });
+}
+
+function getTemplate(templateName) {
+    return new Promise((resolve, reject) => {
+        db.get(
+            'SELECT prompt FROM template WHERE name = ?',
+            [templateName],
+            (err, row) => {
+                if (err) reject(err);
+                else resolve(row ? row.prompt : null);
+            }
+        );
     });
 }
 
@@ -198,5 +224,7 @@ module.exports = {
     getSessionLength,
     countAIQuestionMarks,
     lastTreatment,
+    getTreatment,
+    getTemplate,
     db
 };

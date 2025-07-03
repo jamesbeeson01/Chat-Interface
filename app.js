@@ -1,26 +1,16 @@
+// Load environment variables first
+require('dotenv').config();
+
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const app = express();
 const port = process.env.PORT || 3000;
-const { saveMessage, getSessionMessages, getNumPrompts, saveSession, updateSessionLength, getSessionLength, countAIQuestionMarks, lastTreatment } = require('./database');
-
-// Load environment variables
-require('dotenv').config();
-
-// api key
-// const API_KEY = "AIzaSyBcCaUUXj4s6YYrRcXC7AGOrRbKNDrN7iQ"
-const API_KEY = process.env.GEMINI_API_KEY;
-if (!API_KEY) {
-    console.error('GEMINI_API_KEY environment variable is not set');
-    process.exit(1);
-}
-
-// Gemini API setup
-const { GoogleGenAI } = require('@google/genai');
-const ai = new GoogleGenAI({ apiKey: API_KEY});
+const { saveMessage, getSessionMessages, getNumPrompts, saveSession, updateSessionLength, getSessionLength, countAIQuestionMarks, lastTreatment, getTreatment, getTemplate } = require('./database');
+const { control, treatment } = require('./bots');
 
 const model_type = "gemini-2.0-flash-exp";
 var template = "Basic";
+var treatmentGroup = 1;
 
 // Middleware to parse JSON bodies
 app.use(express.json());
@@ -37,14 +27,14 @@ app.get('/', (req, res) => {
 // Get chat response
 app.post('/chat/prompt', async (req, res) => {
     try {
-        const { prompt, sessionId, template } = req.body;
+        const { prompt, sessionId } = req.body;
         
         // Ensure we have a session ID
         if (!sessionId) {
             return res.status(400).json({ error: 'Session ID is required' });
         }
         
-        const templateName = template || 'Basic';
+        const templateName = (treatmentGroup === 1) ? 'Treatment' : 'Control';
         console.log('Session ID:', sessionId);
         console.log('Received prompt:', prompt);
         
@@ -74,8 +64,17 @@ app.post('/chat/prompt', async (req, res) => {
         }
           
         // Generate response
-        const result = await ai.models.generateContent(input);
-        const text = await result.text;
+        //const result = await generateContent(input);
+        let text = ''
+        if (templateName === 'Control') {
+            const result = await control(formattedMessages, model_type);
+            text = result.text;
+        } else if (templateName === 'Treatment') {
+            const result = await treatment(formattedMessages, 'Chapter 11', model_type);
+            text = result.text;
+        } else {
+            text = 'Whoops! There was a "Control/Treatment" error. Please reach out to jamesbeeson01@gmail.com';
+        }
         
         // Save AI response
         await saveMessage({
@@ -102,27 +101,48 @@ app.post('/chat/prompt', async (req, res) => {
 // Initialize a new session
 app.post('/session/init', async (req, res) => {
     try {
-        const { userSection, template } = req.body;
+        let { userSection, existingSessionId } = req.body;
         const sessionId = uuidv4();
         
         // Determine treatment based on previous sessions with the same userSection
-        let treatment = 1; // Default to 1 if no previous session or if previous treatment was 0
+        // let treatmentGroup = 1; // Default to 1 if no previous session or if previous treatment was 0
+        
+        // treatmentGroup is defined outside this function
+        if (existingSessionId) {
+            // Get the existing session's treatment (week 12)
+            const existingTreatment = await getTreatment(existingSessionId);
+            treatmentGroup = (existingTreatment === 1) ? 0 : 1;
+        }
         if (userSection) {
             const lastTreat = await lastTreatment(userSection);
             // Use strict equality and handle null case
-            treatment = (lastTreat === 1) ? 0 : 1;
-            console.log(`User section: ${userSection}, Last treatment: ${lastTreat}, New treatment: ${treatment}`);
+            treatmentGroup = (lastTreat === 1) ? 0 : 1;
         }
         
         // Store the new session in the database
-        await saveSession(sessionId, userSection, treatment);
+        await saveSession(sessionId, userSection, treatmentGroup);
+
+        const templateName = (treatmentGroup === 1) ? 'Treatment' : 'Control';
+        
+        // Get template content from database
+        const templateContent = await getTemplate(templateName);
+
+        await saveMessage({
+            id: uuidv4(),
+            content: templateContent,
+            type: 'ai',
+            sessionId: sessionId,
+            model: null,
+            templateName: templateName,
+            parentMessageId: null,
+            input: null
+        });
         
         console.log('Initialized new session:', sessionId);
         
         res.json({ 
             sessionId: sessionId,
-            success: true,
-            treatment: treatment // Include the treatment in the response
+            success: true
         });
     } catch (error) {
         console.error('Error initializing session:', error);

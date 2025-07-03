@@ -341,9 +341,9 @@
 
         // Function to show the session URL alert
         function showSessionUrl(sessionId, delay = 1000) {
-            setTimeout(() => {
-                alert(`This is your verification link you will need to submit in the weekly quiz:\n\n${window.location.origin}/?session=${sessionId}\n\nIf you lose it, you can find it again in the survey or by refreshing the page.`);
-            }, delay);
+            // setTimeout(() => {
+            //     alert(`This is your verification link you will need to submit in the weekly quiz:\n\n${window.location.origin}/?session=${sessionId}\n\nIf you lose it, you can find it again in the survey or by refreshing the page.`);
+            // }, delay);
         }
 
         function updateSessionTimerTooltip() {
@@ -399,17 +399,34 @@
             const surveyButton = document.getElementById('survey-button');
             const week = getCurrentWeek();
             console.log(week);
-            let treatment = 1;
             
             // Get session ID from URL if present
             const urlParams = new URLSearchParams(window.location.search);
             let currentSessionId = urlParams.get('session');
             let sessionFromUrl = currentSessionId !== null;
             freeze = sessionFromUrl;
+
             if (!currentSessionId) {
                 // If not in URL, check cookie
                 const cookieSessionId = getCookie('sessionId');
                 if (cookieSessionId) {
+                    if (week =="Week 12") {
+                        // Initialize a new session on the server with the existing session ID
+                        try {
+                            fetch('/session/init', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ 
+                                    existingSessionId: cookieSessionId
+                                })
+                            })
+                        } catch (err) {
+                            console.error('Error in fetch call:', err);
+                        }
+                    }
+
                     currentSessionId = cookieSessionId;
                     // Show session URL when session is loaded from cookie (on refresh)
                     showSessionUrl(currentSessionId, 1000);
@@ -512,10 +529,9 @@
                   modal.remove();
                   try {
                     const selected = options.querySelector('input[name="consent-question"]:checked');
-
+                    
                     // Save the section text (e.g., '9:45 am' or 'Online')
                     userSection = selected ? selected.parentElement.textContent.trim() : '';
-                    let template = 'Basic'; // change to control eventually
                     
                     // Initialize a new session on the server
                     const response = await fetch('/session/init', {
@@ -524,8 +540,7 @@
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({ 
-                            userSection: userSection,
-                            template: week
+                            userSection: userSection
                         })
                     });
                     
@@ -533,13 +548,10 @@
                     if (data.success && data.sessionId) {
                         // Set the session ID from the server response
                         currentSessionId = data.sessionId;
-                        // Update the treatment value if provided
-                        if (data.treatment !== undefined) {
-                            treatment = data.treatment;
-                            console.log(`Session treatment: ${treatment}`);
-                        }
                         // Save it as a cookie
                         setCookie('sessionId', currentSessionId, 30);
+                        // Reload conversation history
+                        loadHistory(currentSessionId);
                         // Start the session timer
                         startSessionTimer(currentSessionId);
                         
