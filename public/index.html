@@ -403,6 +403,9 @@
             // Get session ID from URL if present
             const urlParams = new URLSearchParams(window.location.search);
             let currentSessionId = urlParams.get('session');
+
+            alert("Chat will become available Tuesday, July 8th");
+            currentSessionId = 'Locked';
             let sessionFromUrl = currentSessionId !== null;
             freeze = sessionFromUrl;
 
