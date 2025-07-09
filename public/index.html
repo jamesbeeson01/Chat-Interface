@@ -316,22 +316,31 @@
         }
 
         // Function to report message clicks
-        async function reportMessageClick(type, sessionId, content) {
+        async function reportMessageClick(type, sessionId, content, event) {
             console.log(`Clicked ${type} message`);
-            try {
-                const response = await fetch('/message/click', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ 
-                        type,
-                        sessionId,
-                        content
-                    })
-                });
-            } catch (err) {
-                console.error('Error reporting message click:', err);
+            
+            // If Ctrl key is held down, navigate to message details
+            if (event && event.ctrlKey) {
+                try {
+                    const response = await fetch('/message/click', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ 
+                            type,
+                            sessionId,
+                            content
+                        })
+                    });
+                    
+                    // The server will redirect us to the message details page
+                    if (response.redirected) {
+                        window.open(response.url, '_blank');
+                    }
+                } catch (err) {
+                    console.error('Error reporting message click:', err);
+                }
             }
         }
 
@@ -339,11 +348,110 @@
         let sessionMinutes = 0;
         let sessionTimer = null;
 
-        // Function to show the session URL alert
+        // Function to show the session URL modal
         function showSessionUrl(sessionId, delay = 1000) {
-            // setTimeout(() => {
-            //     alert(`This is your verification link you will need to submit in the weekly quiz:\n\n${window.location.origin}/?session=${sessionId}\n\nIf you lose it, you can find it again in the survey or by refreshing the page.`);
-            // }, delay);
+            setTimeout(() => {
+                const sessionUrl = `${window.location.origin}/?session=${sessionId}`;
+                
+                // Create modal overlay
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                    background: rgba(0,0,0,0.7); display: flex; align-items: center;
+                    justify-content: center; z-index: 10000;
+                `;
+                
+                // Create modal content
+                const content = document.createElement('div');
+                content.style.cssText = `
+                    background: white; padding: 32px; border-radius: 12px;
+                    max-width: 500px; width: 90%; text-align: center;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                `;
+                
+                // Add title
+                const title = document.createElement('h3');
+                title.textContent = 'Your Verification Link';
+                title.style.marginTop = '0';
+                content.appendChild(title);
+                
+                // Add description
+                const description = document.createElement('p');
+                description.textContent = 'You will need to submit this link in the weekly quiz. If you lose it, you can find it again in the survey or by refreshing the page.';
+                description.style.marginBottom = '20px';
+                content.appendChild(description);
+                
+                // Add selectable URL text
+                const urlBox = document.createElement('div');
+                urlBox.textContent = sessionUrl;
+                urlBox.style.cssText = `
+                    background: #f7f7f8; padding: 12px; border-radius: 8px;
+                    margin: 16px 0; font-family: monospace; font-size: 14px;
+                    border: 1px solid #e5e5e5; user-select: all; cursor: text;
+                `;
+                content.appendChild(urlBox);
+                
+                // Add buttons container
+                const buttonContainer = document.createElement('div');
+                buttonContainer.style.cssText = 'display: flex; gap: 12px; justify-content: center; margin-top: 20px;';
+                
+                // Add copy button
+                const copyButton = document.createElement('button');
+                copyButton.textContent = 'Copy to Clipboard';
+                copyButton.style.cssText = `
+                    padding: 10px 20px; background: #10a37f; color: white;
+                    border: none; border-radius: 8px; cursor: pointer; font-size: 14px;
+                `;
+                copyButton.onclick = async () => {
+                    try {
+                        await navigator.clipboard.writeText(sessionUrl);
+                        copyButton.textContent = 'Copied!';
+                        copyButton.style.background = '#0e906f';
+                        setTimeout(() => {
+                            copyButton.textContent = 'Copy to Clipboard';
+                            copyButton.style.background = '#10a37f';
+                        }, 2000);
+                    } catch (err) {
+                        // Fallback for older browsers
+                        urlBox.select();
+                        document.execCommand('copy');
+                        copyButton.textContent = 'Copied!';
+                    }
+                };
+                
+                // Add close button
+                const closeButton = document.createElement('button');
+                closeButton.textContent = 'OK';
+                closeButton.style.cssText = `
+                    padding: 10px 20px; background: white; color: #10a37f;
+                    border: 2px solid #10a37f; border-radius: 8px; cursor: pointer; font-size: 14px;
+                `;
+                closeButton.onclick = () => modal.remove();
+                
+                buttonContainer.appendChild(copyButton);
+                buttonContainer.appendChild(closeButton);
+                content.appendChild(buttonContainer);
+                
+                modal.appendChild(content);
+                document.body.appendChild(modal);
+                
+                // Close on overlay click
+                modal.onclick = (e) => {
+                    if (e.target === modal) modal.remove();
+                };
+                
+                // Close on Escape key
+                const handleEscape = (e) => {
+                    if (e.key === 'Escape') {
+                        modal.remove();
+                        document.removeEventListener('keydown', handleEscape);
+                    }
+                };
+                document.addEventListener('keydown', handleEscape);
+                
+                // Auto-select the URL text for easy copying
+                urlBox.focus();
+            }, delay);
         }
 
         function updateSessionTimerTooltip() {
@@ -367,6 +475,16 @@
             if (sessionTimer) clearInterval(sessionTimer);
             updateSessionTimerTooltip();
             sessionTimer = setInterval(async () => {
+                if (sessionMinutes >= 45) {
+                    freeze = true;
+                    alert("You have reached 45 minutes and the AI will no longer respond. Please end the chat by clicking the survey button.");
+                    return;
+                } else if (sessionMinutes == 40) {
+                    alert("The session will end in 5 minutes");
+                } else if (sessionMinutes == 30) {
+                    alert("30 minutes have passed. You may end the chat by clicking the survey button or continue for up to 45 minutes.");
+                }
+
                 if (!freeze) {
                     sessionMinutes++;
                     updateSessionTimerTooltip();
@@ -403,9 +521,6 @@
             // Get session ID from URL if present
             const urlParams = new URLSearchParams(window.location.search);
             let currentSessionId = urlParams.get('session');
-
-            alert("Chat will become available Tuesday, July 8th");
-            currentSessionId = 'Locked';
             let sessionFromUrl = currentSessionId !== null;
             freeze = sessionFromUrl;
 
@@ -413,31 +528,10 @@
                 // If not in URL, check cookie
                 const cookieSessionId = getCookie('sessionId');
                 if (cookieSessionId) {
-                    if (week =="Week 12") {
-                        // Initialize a new session on the server with the existing session ID
-                        try {
-                            fetch('/session/init', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({ 
-                                    existingSessionId: cookieSessionId
-                                })
-                            })
-                        } catch (err) {
-                            console.error('Error in fetch call:', err);
-                        }
-                    }
-
                     currentSessionId = cookieSessionId;
                     // Show session URL when session is loaded from cookie (on refresh)
                     showSessionUrl(currentSessionId, 1000);
                 }
-            }
-            if (!currentSessionId && week == "Week 12") {
-                    alert("ERROR: No sessionId \nPlease contact James Beeson at jamesbeeson01@gmail.com");
-                    freeze = true;
             }
             let userSection = '';
             
@@ -669,7 +763,7 @@
                 const messageElement = document.createElement('div');
                 messageElement.className = 'user-prompt';
                 messageElement.textContent = message;
-                messageElement.onclick = () => reportMessageClick('user', currentSessionId, message);
+                messageElement.onclick = (event) => reportMessageClick('user', currentSessionId, message, event);
 
                 // Add prompt to container and container to messages
                 messageContainer.appendChild(messageElement);
@@ -712,7 +806,7 @@
                 responseElement.className = 'chat-response';
                 // Parse markdown and set as HTML
                 responseElement.innerHTML = marked.parse(responseText);
-                responseElement.onclick = () => reportMessageClick('ai', currentSessionId, responseText);
+                responseElement.onclick = (event) => reportMessageClick('ai', currentSessionId, responseText, event);
 
                 // Add prompt to container and container to messages
                 responseContainer.appendChild(responseElement);
@@ -739,7 +833,7 @@
                         const element = document.createElement('div');
                         element.className = msg.type === 'user' ? 'user-prompt' : 'chat-response';
                         element.innerHTML = msg.type === 'user' ? msg.content : marked.parse(msg.content);
-                        element.onclick = () => reportMessageClick(msg.type, sessionId, msg.content);
+                        element.onclick = (event) => reportMessageClick(msg.type, sessionId, msg.content, event);
                         
                         container.appendChild(element);
                         messages.appendChild(container);

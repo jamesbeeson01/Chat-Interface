@@ -8,9 +8,8 @@ const port = process.env.PORT || 3000;
 const { saveMessage, getSessionMessages, getNumPrompts, saveSession, updateSessionLength, getSessionLength, countAIQuestionMarks, lastTreatment, getTreatment, getTemplate } = require('./database');
 const { control, treatment } = require('./bots');
 
-const model_type = "gemini-2.0-flash-exp";
+const model_type = "gemini-2.5-flash";
 var template = "Basic";
-var treatmentGroup = 1;
 
 // Middleware to parse JSON bodies
 app.use(express.json());
@@ -34,8 +33,12 @@ app.post('/chat/prompt', async (req, res) => {
             return res.status(400).json({ error: 'Session ID is required' });
         }
         
-        const templateName = (treatmentGroup === 1) ? 'Treatment' : 'Control';
+        // Get the treatment group for this specific session
+        const sessionTreatment = await getTreatment(sessionId);
+        const templateName = (sessionTreatment === 1) ? 'Treatment' : 'Control';
         console.log('Session ID:', sessionId);
+        console.log('Session Treatment:', sessionTreatment);
+        console.log('Template Name:', templateName);
         console.log('Received prompt:', prompt);
         
         // Get session messages and save new user message
@@ -58,20 +61,24 @@ app.post('/chat/prompt', async (req, res) => {
             parts: [{ text: msg.content }]
         }));
 
-        const input = {
+        let text = ''
+        let input = {
             model: model_type,
             contents: formattedMessages
         }
           
         // Generate response
         //const result = await generateContent(input);
-        let text = ''
         if (templateName === 'Control') {
             const result = await control(formattedMessages, model_type);
             text = result.text;
         } else if (templateName === 'Treatment') {
             const result = await treatment(formattedMessages, 'Chapter 11', model_type);
             text = result.text;
+            input = {
+                model: model_type,
+                contents: result.contents
+            }
         } else {
             text = 'Whoops! There was a "Control/Treatment" error. Please reach out to jamesbeeson01@gmail.com';
         }
@@ -105,9 +112,8 @@ app.post('/session/init', async (req, res) => {
         const sessionId = uuidv4();
         
         // Determine treatment based on previous sessions with the same userSection
-        // let treatmentGroup = 1; // Default to 1 if no previous session or if previous treatment was 0
+        let treatmentGroup = 1; // Default to 1 if no previous session or if previous treatment was 0
         
-        // treatmentGroup is defined outside this function
         if (existingSessionId) {
             // Get the existing session's treatment (week 12)
             const existingTreatment = await getTreatment(existingSessionId);
@@ -191,12 +197,15 @@ app.post('/message/click', async (req, res) => {
             (err, row) => {
                 if (err) {
                     console.error('Error finding message:', err);
+                    res.sendStatus(500);
                 } else if (row) {
                     console.log(`Clicked message ID: ${row.id}`);
+                    res.redirect(`/message.html?message=${row.id}`);
+                } else {
+                    res.sendStatus(404);
                 }
             }
         );
-        res.sendStatus(200);
     } catch (error) {
         console.error('Error handling message click:', error);
         res.sendStatus(500);

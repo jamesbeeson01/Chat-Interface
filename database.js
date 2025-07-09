@@ -41,6 +41,17 @@ db.serialize(() => {
             prompt TEXT
         )
     `);
+    // Session table
+    db.run(`
+        CREATE TABLE IF NOT EXISTS textbook (
+            title TEXT PRIMARY KEY,
+            url TEXT,
+            text TEXT,
+            cleanText TEXT,
+            summary TEXT,
+            chapter TEXT
+        )
+    `);
 
     // Insert default template
     db.run(`
@@ -215,6 +226,40 @@ function getTemplate(templateName) {
     });
 }
 
+function getTitles() {
+    return new Promise((resolve, reject) => {
+        db.all(
+            "SELECT title, summary FROM textbook WHERE cleanText IS NOT NULL",
+            [],
+            (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows);
+            }
+        )
+    });
+}
+
+function getText(titles) {
+    return new Promise((resolve, reject) => {
+        // Ensure titles is an array
+        if (!Array.isArray(titles) || titles.length === 0) {
+            return resolve([]);
+        }
+        // Create placeholders for each title
+        const placeholders = titles.map(() => '?').join(',');
+        db.all(
+            `SELECT title, cleanText FROM textbook WHERE title IN (${placeholders})`,
+            titles,
+            (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows);
+            }
+        );
+    });
+}
+
+
+
 module.exports = {
     saveMessage,
     getSessionMessages,
@@ -226,5 +271,7 @@ module.exports = {
     lastTreatment,
     getTreatment,
     getTemplate,
+    getTitles,
+    getText,
     db
 };

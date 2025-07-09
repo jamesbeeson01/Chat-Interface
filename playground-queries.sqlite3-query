@@ -34,3 +34,26 @@ ORDER BY MIN(timestamp) DESC
 LIMIT 1;
 
 DROP TABLE session;
+
+DELETE FROM session WHERE sessionId = 'c07154df-82e9-4ca0-8b5c-095ef907babe';
+
+CREATE TABLE IF NOT EXISTS textbook (
+    title TEXT PRIMARY KEY,
+    url TEXT,
+    text TEXT,
+    summary TEXT,
+    chapter TEXT
+);
+
+ALTER TABLE textbook RENAME COLUMN sectionName TO title;
+
+DELETE FROM textbook WHERE title = 'Cover';
+
+UPDATE textbook SET text = NULL WHERE title = 'Language Acquisition';
+
+ALTER TABLE textbook ADD COLUMN cleanText TEXT;
+
+SELECT title, text FROM textbook WHERE cleanText IS NULL;
+
+DELETE FROM messages;
+DELETE FROM session;
