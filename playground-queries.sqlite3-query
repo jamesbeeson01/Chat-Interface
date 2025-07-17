@@ -57,7 +57,3 @@ SELECT title, text FROM textbook WHERE cleanText IS NULL;
 
 DELETE FROM messages;
 DELETE FROM session;
-
-SELECT * FROM messages WHERE sessionId = '95afbace-a2f5-45eb-a844-12e0190c7fc7';
-
-SELECT input FROM messages JOIN session ON messages.sessionId = session.sessionId WHERE treatment = 1 AND input IS NOT NULL;
