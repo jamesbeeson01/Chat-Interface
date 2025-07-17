@@ -77,3 +77,4 @@ Overall, I found that AI is hard to measure and difficult to wrangle. Even when 
 - [Gemini AI Studio](https://aistudio.google.com/)
 - [AI Agentic Patters](https://www.philschmid.de/agentic-patterns)
 - [Firecrawl](firecrawl.dev) (for getting the textbook content)
+- [My Github Repo](https://github.com/jamesbeeson01/Chat-Interface)
