@@ -256,4 +256,20 @@ git commit -m "Description of your changes"
 git push origin main
 ```
 
+### skip-worktree with chat.db
+
+To allow a chat.db template in the public repo without it committing or pulling updates for chat.db, I ran this on my local machine:
+
+```bash
+git update-index --skip-worktree chat.db
+```
+
+This allows that exact behavior, cloning the template chat.db initially from github, but not pulling or pushing and updates. If I do need to push or pull an update, I can run the following
+
+```bash
+git update-index --no-skip-worktree chat.db
+git pull  # or push
+git update-index --skip-worktree chat.db
+```
+
 Note: The database schema is defined in `database.js` and will be automatically applied when the application starts. The `chat.db` file contains your conversation data and will be synced with GitHub when you push changes.
