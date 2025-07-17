@@ -264,7 +264,7 @@ To allow a chat.db template in the public repo without it committing or pulling 
 git update-index --skip-worktree chat.db
 ```
 
-This allows that exact behavior, cloning the template chat.db initially from github, but not pulling or pushing and updates. If I do need to push or pull an update, I can run the following
+This allows that exact behavior, cloning the template chat.db initially from github, but not pulling or pushing updates. If I do need to push or pull an update, I can run the following
 
 ```bash
 git update-index --no-skip-worktree chat.db
